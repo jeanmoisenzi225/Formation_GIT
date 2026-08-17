@@ -55,6 +55,30 @@ Le dashboard est accessible sur `http://localhost:5173`.
 
 Un relevé d'exemple est fourni dans `backend/sample_data/releve_exemple.csv` (titres BRVM réels : Ecobank CI, Sonatel, Sodeci, Bank of Africa Bénin, Orange CI) pour tester l'application de bout en bout.
 
+## Déploiement (URL publique gratuite)
+
+L'app n'est hébergée nulle part par défaut. Voici comment obtenir une URL publique en ~10 minutes avec Render (backend) + Vercel (frontend) — les deux ont un plan gratuit et se connectent directement au repo GitHub. Ces comptes t'appartiennent : je ne peux pas les créer à ta place, mais tout est préparé pour que ce soit juste quelques clics.
+
+**1. Backend sur Render**
+1. Créer un compte sur [render.com](https://render.com) (gratuit, connexion via GitHub).
+2. « New + » → « Blueprint » → sélectionner le repo `jeanmoisenzi225/Formation_GIT`, branche `claude/portfolio-analysis-app-movgid`.
+3. Render détecte `render.yaml` à la racine et propose de créer le service `portfolio-analyzer-api` → cliquer « Apply ».
+4. Attendre la fin du build (2-3 min), puis noter l'URL générée (ex. `https://portfolio-analyzer-api-xxxx.onrender.com`).
+
+Le plan gratuit met le service en veille après 15 min d'inactivité : la première requête après une pause prend 30-60 s (cold start), ensuite c'est rapide.
+
+**2. Frontend sur Vercel**
+1. Créer un compte sur [vercel.com](https://vercel.com) (gratuit, connexion via GitHub).
+2. « Add New » → « Project » → importer le même repo et la même branche.
+3. Dans « Root Directory », sélectionner `frontend` (Vercel détecte Vite automatiquement).
+4. Ajouter la variable d'environnement `VITE_API_BASE_URL` = l'URL Render obtenue à l'étape 1.
+5. Déployer → Vercel donne une URL du type `https://xxxx.vercel.app`.
+
+**3. Autoriser le frontend sur le backend**
+Retourner sur Render → Environment → remplacer `CORS_ORIGINS` (valeur par défaut `http://localhost:5173`) par l'URL Vercel obtenue, puis redéployer le service.
+
+L'app est alors accessible à l'URL Vercel pour n'importe qui possédant le lien. Chaque nouveau `git push` sur cette branche redéploie automatiquement les deux services.
+
 ## Format du relevé CSV attendu
 
 Le parseur (`backend/app/parser.py`) reconnaît plusieurs libellés de colonnes (français/anglais) pour s'adapter à différents exports de courtiers. Colonnes obligatoires : **date**, **ticker**, **quantité**. Colonnes optionnelles : libellé, type, prix unitaire (ou montant), frais, devise (XOF par défaut).
