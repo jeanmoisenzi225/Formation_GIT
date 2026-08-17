@@ -1,0 +1,65 @@
+name: Agent WhatsApp BRVM
+
+on:
+  schedule:
+    # Veille des actualites: toutes les 30 min, 08h00-18h00 UTC, lun-ven
+    - cron: "0,30 8-18 * * 1-5"
+    # Recapitulatif de fin de seance: 17h00 UTC (ajuster selon la cloture BRVM), lun-ven
+    - cron: "0 17 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Job a executer manuellement"
+        required: true
+        default: "news"
+        type: choice
+        options:
+          - news
+          - recap
+
+jobs:
+  news:
+    if: github.event_name == 'workflow_dispatch' && inputs.job == 'news' || github.event.schedule == '0,30 8-18 * * 1-5'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r whatsapp-brvm-agent/requirements.txt
+      - name: Restaurer l'etat (deduplication)
+        uses: actions/cache@v4
+        with:
+          path: whatsapp-brvm-agent/state.json
+          key: brvm-state-${{ github.run_id }}
+          restore-keys: brvm-state-
+      - name: Verifier les nouvelles annonces BRVM
+        working-directory: whatsapp-brvm-agent
+        env:
+          WHATSAPP_TOKEN: ${{ secrets.WHATSAPP_TOKEN }}
+          WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
+          WHATSAPP_RECIPIENTS: ${{ secrets.WHATSAPP_RECIPIENTS }}
+        run: python check_news.py
+
+  recap:
+    if: github.event_name == 'workflow_dispatch' && inputs.job == 'recap' || github.event.schedule == '0 17 * * 1-5'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r whatsapp-brvm-agent/requirements.txt
+      - name: Restaurer l'etat (deduplication)
+        uses: actions/cache@v4
+        with:
+          path: whatsapp-brvm-agent/state.json
+          key: brvm-state-${{ github.run_id }}
+          restore-keys: brvm-state-
+      - name: Envoyer le recapitulatif de fin de seance (BOC)
+        working-directory: whatsapp-brvm-agent
+        env:
+          WHATSAPP_TOKEN: ${{ secrets.WHATSAPP_TOKEN }}
+          WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
+          WHATSAPP_RECIPIENTS: ${{ secrets.WHATSAPP_RECIPIENTS }}
+        run: python send_recap.py
