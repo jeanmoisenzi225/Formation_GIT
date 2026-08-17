@@ -1,0 +1,9 @@
+Date;Ticker;Libellé;Type;Quantité;Cours;Frais;Devise
+15/01/2023;AAPL;Apple Inc.;Achat;10;135.21;4.99;USD
+15/01/2023;MC.PA;LVMH;Achat;2;720.50;4.99;EUR
+03/03/2023;AI.PA;Air Liquide;Achat;15;155.30;4.99;EUR
+20/04/2023;AAPL;Apple Inc.;Achat;5;165.10;4.99;USD
+10/06/2023;AAPL;Apple Inc.;Vente;3;180.25;4.99;USD
+01/09/2023;MC.PA;LVMH;Dividende;2;12.00;0;EUR
+15/11/2023;SAN.PA;Sanofi;Achat;20;88.40;4.99;EUR
+05/02/2024;AI.PA;Air Liquide;Dividende;15;2.95;0;EUR
