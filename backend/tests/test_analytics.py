@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 import pandas as pd
 import pytest
@@ -15,35 +15,35 @@ def tx(d, ticker, type_, qty, price, fees=0.0):
 
 def test_build_positions_with_market_data(monkeypatch):
     transactions = [
-        tx(date(2023, 1, 1), "AAPL", TransactionType.BUY, 10, 100.0),
-        tx(date(2023, 1, 1), "MC.PA", TransactionType.BUY, 2, 700.0),
+        tx(date(2023, 1, 1), "ECOC", TransactionType.BUY, 10, 100.0),
+        tx(date(2023, 1, 1), "SNTS", TransactionType.BUY, 2, 700.0),
     ]
     state = build_positions(transactions)
 
     fake_infos = {
-        "AAPL": TickerInfo(current_price=150.0, sector="Technology", country="United States",
-                            currency="USD", pe_ratio=28.0, name="Apple Inc."),
-        "MC.PA": TickerInfo(current_price=750.0, sector="Consumer Cyclical", country="France",
-                             currency="EUR", pe_ratio=25.0, name="LVMH"),
+        "ECOC": TickerInfo(current_price=150.0, sector="Services Financiers", country="Côte d'Ivoire",
+                            currency="XOF", pe_ratio=None, name="Ecobank Côte d'Ivoire"),
+        "SNTS": TickerInfo(current_price=750.0, sector="Télécommunications", country="Sénégal",
+                            currency="XOF", pe_ratio=None, name="Sonatel"),
     }
-    monkeypatch.setattr(analytics, "fetch_ticker_info", lambda ticker: fake_infos[ticker])
+    monkeypatch.setattr(analytics, "fetch_ticker_infos", lambda tickers: {t: fake_infos[t] for t in tickers})
 
     positions, warnings = analytics.build_positions_with_market_data(state)
     assert warnings == []
     by_ticker = {p.ticker: p for p in positions}
 
-    assert by_ticker["AAPL"].current_value == pytest.approx(1500.0)
-    assert by_ticker["AAPL"].unrealized_gain == pytest.approx(500.0)
-    assert by_ticker["MC.PA"].current_value == pytest.approx(1500.0)
+    assert by_ticker["ECOC"].current_value == pytest.approx(1500.0)
+    assert by_ticker["ECOC"].unrealized_gain == pytest.approx(500.0)
+    assert by_ticker["SNTS"].current_value == pytest.approx(1500.0)
 
-    total = by_ticker["AAPL"].current_value + by_ticker["MC.PA"].current_value
-    assert by_ticker["AAPL"].weight_pct == pytest.approx(1500 / total * 100)
+    total = by_ticker["ECOC"].current_value + by_ticker["SNTS"].current_value
+    assert by_ticker["ECOC"].weight_pct == pytest.approx(1500 / total * 100)
 
 
 def test_build_positions_handles_missing_market_data(monkeypatch):
     transactions = [tx(date(2023, 1, 1), "UNKNOWN", TransactionType.BUY, 3, 50.0)]
     state = build_positions(transactions)
-    monkeypatch.setattr(analytics, "fetch_ticker_info", lambda ticker: None)
+    monkeypatch.setattr(analytics, "fetch_ticker_infos", lambda tickers: {t: None for t in tickers})
 
     positions, warnings = analytics.build_positions_with_market_data(state)
     assert len(warnings) == 1
@@ -67,11 +67,12 @@ def test_allocation_by_sector():
 
 
 def test_build_performance_and_risk(monkeypatch):
+    start_date = date.today() - timedelta(days=30)
     transactions = [
-        tx(date(2023, 1, 2), "AAPL", TransactionType.BUY, 10, 100.0),
+        tx(start_date, "ECOC", TransactionType.BUY, 10, 100.0),
     ]
-    dates = pd.date_range("2023-01-02", periods=5, freq="D")
-    prices = pd.DataFrame({"AAPL": [100.0, 102.0, 101.0, 105.0, 110.0]}, index=dates)
+    dates = pd.date_range(start_date, periods=5, freq="D")
+    prices = pd.DataFrame({"ECOC": [100.0, 102.0, 101.0, 105.0, 110.0]}, index=dates)
     monkeypatch.setattr(analytics, "fetch_price_history", lambda tickers, start, end: prices)
     monkeypatch.setattr(analytics, "fetch_benchmark_history", lambda start, end: {})
 

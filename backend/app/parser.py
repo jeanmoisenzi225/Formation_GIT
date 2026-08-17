@@ -143,7 +143,7 @@ def parse_statement_csv(content: bytes) -> tuple[list[Transaction], list[str]]:
             tx_type = _parse_type(raw_type, quantity)
 
             fees = _parse_number(row[mapping["fees"]]) if "fees" in mapping else 0.0
-            currency = str(row[mapping["currency"]]).strip().upper() if "currency" in mapping and not pd.isna(row[mapping["currency"]]) else "EUR"
+            currency = str(row[mapping["currency"]]).strip().upper() if "currency" in mapping and not pd.isna(row[mapping["currency"]]) else "XOF"
             label = str(row[mapping["label"]]).strip() if "label" in mapping and not pd.isna(row[mapping["label"]]) else None
 
             transactions.append(

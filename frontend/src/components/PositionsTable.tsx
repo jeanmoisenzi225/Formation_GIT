@@ -32,10 +32,10 @@ export function PositionsTable({ positions }: Props) {
                   )}
                 </td>
                 <td className="px-4 py-3 tabular-nums">{formatNumber(p.quantity)}</td>
-                <td className="px-4 py-3 tabular-nums">{formatCurrency(p.average_cost, p.currency ?? 'EUR')}</td>
-                <td className="px-4 py-3 tabular-nums">{formatCurrency(p.current_price, p.currency ?? 'EUR')}</td>
+                <td className="px-4 py-3 tabular-nums">{formatCurrency(p.average_cost, p.currency ?? 'XOF')}</td>
+                <td className="px-4 py-3 tabular-nums">{formatCurrency(p.current_price, p.currency ?? 'XOF')}</td>
                 <td className="px-4 py-3 tabular-nums font-medium">
-                  {formatCurrency(p.current_value ?? p.cost_basis, p.currency ?? 'EUR')}
+                  {formatCurrency(p.current_value ?? p.cost_basis, p.currency ?? 'XOF')}
                 </td>
                 <td className="px-4 py-3 tabular-nums font-medium" style={{ color: p.market_data_available ? gainColor : undefined }}>
                   {p.market_data_available ? (

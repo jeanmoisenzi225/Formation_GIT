@@ -13,17 +13,18 @@ def test_parse_sample_statement():
     transactions, warnings = parse_statement_csv(content)
 
     assert warnings == []
-    assert len(transactions) == 8
+    assert len(transactions) == 10
 
     first = transactions[0]
-    assert first.ticker == "AAPL"
+    assert first.ticker == "ECOC"
     assert first.type == TransactionType.BUY
-    assert first.quantity == 10
-    assert first.unit_price == pytest.approx(135.21)
-    assert first.fees == pytest.approx(4.99)
+    assert first.quantity == 50
+    assert first.unit_price == pytest.approx(6800)
+    assert first.fees == pytest.approx(2500)
+    assert first.currency == "XOF"
 
     dividend = [t for t in transactions if t.type == TransactionType.DIVIDEND][0]
-    assert dividend.ticker in {"MC.PA", "AI.PA"}
+    assert dividend.ticker in {"SNTS", "SDCC"}
 
 
 def test_parse_english_headers():

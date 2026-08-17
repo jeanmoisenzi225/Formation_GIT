@@ -46,6 +46,9 @@ export function FileUpload({ onFileSelected, isLoading }: Props) {
       <p className="mt-4 text-xs text-gray-400">
         Colonnes attendues : date, ticker, type (achat/vente/dividende), quantité, prix
       </p>
+      <p className="mt-1 text-xs text-gray-400">
+        Titres BRVM (ex. ECOC, SNTS, SDCC) reconnus nativement — autres places boursières en repli
+      </p>
     </div>
   )
 }

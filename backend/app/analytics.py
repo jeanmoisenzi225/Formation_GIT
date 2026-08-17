@@ -4,12 +4,12 @@ easy to unit test without hitting the network.
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 import numpy as np
 import pandas as pd
 
-from app.market_data import TickerInfo, fetch_benchmark_history, fetch_price_history, fetch_ticker_info
+from app.market_data import fetch_benchmark_history, fetch_price_history, fetch_ticker_infos
 from app.portfolio import PortfolioState
 from app.schemas import (
     AllocationSlice,
@@ -22,6 +22,7 @@ from app.schemas import (
 
 RISK_FREE_RATE = 0.02  # annualized, used for the Sharpe ratio
 TRADING_DAYS_PER_YEAR = 252
+MAX_LOOKBACK_DAYS = 3 * 365  # bounds how many historical requests a performance chart triggers
 
 
 def build_positions_with_market_data(state: PortfolioState) -> tuple[list[Position], list[str]]:
@@ -29,7 +30,7 @@ def build_positions_with_market_data(state: PortfolioState) -> tuple[list[Positi
     positions: list[Position] = []
 
     total_value = 0.0
-    infos: dict[str, TickerInfo | None] = {ticker: fetch_ticker_info(ticker) for ticker in state.lots}
+    infos = fetch_ticker_infos(list(state.lots.keys()))
 
     provisional: list[tuple[str, Position, float]] = []
     for ticker, lot in state.lots.items():
@@ -139,6 +140,11 @@ def build_performance_and_risk(transactions: list[Transaction]) -> tuple[list[Pe
 
     start = min(t.date for t in buy_sell)
     end = date.today()
+    if (end - start).days > MAX_LOOKBACK_DAYS:
+        start = end - timedelta(days=MAX_LOOKBACK_DAYS)
+        warnings.append(
+            f"Courbe de performance limitée aux {MAX_LOOKBACK_DAYS // 365} dernières années pour rester réactive."
+        )
     tickers = sorted({t.ticker for t in buy_sell})
 
     prices = fetch_price_history(tickers, start, end)

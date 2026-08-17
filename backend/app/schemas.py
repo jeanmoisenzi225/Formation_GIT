@@ -22,7 +22,7 @@ class Transaction(BaseModel):
     quantity: float
     unit_price: float
     fees: float = 0.0
-    currency: str = "EUR"
+    currency: str = "XOF"
 
 
 class Position(BaseModel):
