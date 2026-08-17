@@ -11,6 +11,14 @@ WhatsApp :
    séance de cotation, un résumé chiffré (BRVM Composite, BRVM 30,
    capitalisation, volumes, plus fortes hausses/baisses) accompagné du
    **Bulletin Officiel de la Cote (BOC)** officiel en PDF.
+3. **Assistant conversationnel** : l'utilisateur peut écrire n'importe quoi
+   sur WhatsApp ("quoi de beau aujourd'hui ?", "et SONATEL, ça donne quoi ?"...)
+   et recevoir une réponse en langage naturel, générée par Claude et
+   contextualisée avec les données BRVM les plus récentes.
+
+Les deux premiers points sont des envois **poussés** par l'agent (cron/planification).
+Le troisième est **réactif** : il répond aux messages reçus, via un petit
+serveur web qui doit tourner en continu (voir plus bas).
 
 ## Comment ça marche
 
@@ -129,6 +137,57 @@ sans qu'il soit nécessaire d'héberger quoi que ce soit.
    robuste qu'un vrai disque persistant. Pour un usage intensif, préférer un
    petit serveur/cron dédié.
 
+## Assistant conversationnel (répondre à n'importe quel message)
+
+Contrairement aux alertes poussées, répondre à un message WhatsApp entrant
+nécessite un **webhook** : Meta doit pouvoir appeler une URL HTTPS publique
+de votre côté à chaque message reçu. C'est un serveur qui doit rester actif
+en permanence (pas un script cron).
+
+### Comment ça marche
+
+1. L'utilisateur envoie un message WhatsApp ("quoi de beau aujourd'hui ?").
+2. Meta appelle `POST /webhook` sur votre serveur (`webhook_server.py`).
+3. Le serveur récupère les dernières données BRVM en cache (annonces +
+   résumé du dernier BOC, rafraîchies au plus toutes les
+   `BRVM_CONTEXT_TTL_SECONDS`, 15 min par défaut — `brvm_agent/context_cache.py`)
+   et les passe en contexte à Claude (`brvm_agent/assistant.py`) avec le
+   message de l'utilisateur.
+4. La réponse de Claude est renvoyée sur WhatsApp en texte libre — **pas
+   besoin de template ici** : on répond à un message reçu, donc on est par
+   définition dans la fenêtre de 24h.
+
+### Mise en place
+
+1. Créer une clé API sur [console.anthropic.com](https://console.anthropic.com/)
+   → `ANTHROPIC_API_KEY`.
+2. Dans `.env`, définir `WHATSAPP_VERIFY_TOKEN` (une chaîne arbitraire que
+   vous choisissez) et `WHATSAPP_APP_SECRET` (Meta App Dashboard >
+   Paramètres de l'app > De base > "App secret") — utilisé pour vérifier
+   que les requêtes reçues proviennent bien de Meta.
+3. Lancer le serveur :
+   ```bash
+   pip install -r requirements.txt
+   uvicorn webhook_server:app --host 0.0.0.0 --port 8000
+   ```
+4. Le rendre joignable en HTTPS publiquement. Options :
+   - **Test rapide en local** : [ngrok](https://ngrok.com/) —
+     `ngrok http 8000` donne une URL HTTPS temporaire.
+   - **Déploiement permanent** : un service qui garde un process actif en
+     continu — Render, Railway, Fly.io, ou un VPS avec `systemd` +
+     reverse proxy (Nginx/Caddy) pour le HTTPS. Un `Procfile` est fourni
+     pour les plateformes de type buildpack
+     (`web: uvicorn webhook_server:app --host 0.0.0.0 --port $PORT`).
+     ⚠️ **GitHub Actions ne convient pas ici** (pas de process persistant).
+5. Dans Meta App Dashboard > WhatsApp > Configuration, renseigner l'URL du
+   webhook (`https://votre-domaine/webhook`) et le `WHATSAPP_VERIFY_TOKEN`
+   choisi, puis s'abonner au champ `messages`.
+
+### Tester
+
+Écrivez simplement au numéro WhatsApp Business configuré — n'importe quel
+message. La réponse doit arriver en quelques secondes.
+
 ## Configuration (`.env`)
 
 Voir `.env.example` pour la liste complète des variables. Les principales :
@@ -140,6 +199,8 @@ Voir `.env.example` pour la liste complète des variables. Les principales :
 | `WHATSAPP_USE_TEMPLATES` | `true` en production (obligatoire hors fenêtre 24h) |
 | `BRVM_NEWS_CATEGORIES` | Catégories d'annonces à surveiller |
 | `STATE_FILE` | Fichier local de déduplication |
+| `ANTHROPIC_API_KEY` | Clé API Claude, pour l'assistant conversationnel |
+| `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET` | Sécurisation du webhook entrant |
 
 ## Limites connues
 
@@ -151,3 +212,10 @@ Voir `.env.example` pour la liste complète des variables. Les principales :
   simplement omis du récapitulatif plutôt que de faire échouer l'envoi.
 - Les templates WhatsApp doivent être approuvés par Meta avant la mise en
   production (compter une marge de quelques heures).
+- L'assistant conversationnel répond uniquement à partir du contexte BRVM
+  fourni (annonces récentes + résumé du dernier BOC) : il n'a pas de mémoire
+  de marché historique et peut ne pas savoir répondre à des questions très
+  spécifiques (ex: cours d'une action il y a 6 mois).
+- Le webhook doit rester actif en permanence, contrairement aux scripts
+  `check_news.py`/`send_recap.py` qui peuvent tourner en cron ponctuel :
+  prévoir un hébergement adapté (voir section dédiée).

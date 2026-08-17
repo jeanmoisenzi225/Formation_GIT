@@ -35,6 +35,13 @@ class Config:
 
     state_file: str = os.environ.get("STATE_FILE", "state.json")
 
+    # --- Assistant conversationnel (webhook WhatsApp -> Claude) ---
+    anthropic_api_key: str = os.environ.get("ANTHROPIC_API_KEY", "")
+    anthropic_model: str = os.environ.get("ANTHROPIC_MODEL", "claude-opus-5")
+    whatsapp_verify_token: str = os.environ.get("WHATSAPP_VERIFY_TOKEN", "")
+    whatsapp_app_secret: str = os.environ.get("WHATSAPP_APP_SECRET", "")
+    brvm_context_ttl_seconds: int = int(os.environ.get("BRVM_CONTEXT_TTL_SECONDS", "900"))
+
     def validate_for_sending(self) -> None:
         missing = []
         if not self.whatsapp_token:
@@ -43,6 +50,21 @@ class Config:
             missing.append("WHATSAPP_PHONE_NUMBER_ID")
         if not self.whatsapp_recipients:
             missing.append("WHATSAPP_RECIPIENTS")
+        if missing:
+            raise RuntimeError(
+                "Variables d'environnement manquantes: " + ", ".join(missing)
+            )
+
+    def validate_for_webhook(self) -> None:
+        missing = []
+        if not self.whatsapp_token:
+            missing.append("WHATSAPP_TOKEN")
+        if not self.whatsapp_phone_number_id:
+            missing.append("WHATSAPP_PHONE_NUMBER_ID")
+        if not self.whatsapp_verify_token:
+            missing.append("WHATSAPP_VERIFY_TOKEN")
+        if not self.anthropic_api_key:
+            missing.append("ANTHROPIC_API_KEY")
         if missing:
             raise RuntimeError(
                 "Variables d'environnement manquantes: " + ", ".join(missing)
