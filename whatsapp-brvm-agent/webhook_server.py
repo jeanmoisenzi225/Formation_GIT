@@ -20,14 +20,39 @@ import logging
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import PlainTextResponse
 
+from brvm_agent import scheduler as brvm_scheduler
 from brvm_agent.assistant import answer
 from brvm_agent.config import CONFIG
+from brvm_agent.subscribers import Subscribers
 from brvm_agent.whatsapp import WhatsAppClient
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Agent WhatsApp BRVM")
+
+UNSUBSCRIBE_KEYWORDS = {"stop", "arret", "arrêt", "desabonner", "désabonner"}
+
+WELCOME_MESSAGE = (
+    "Bienvenue sur l'agent BRVM ! \U0001F4C8\n\n"
+    "Tu es maintenant abonne(e) et tu recevras automatiquement :\n"
+    "- une alerte des qu'une nouvelle annonce/communique BRVM est publiee\n"
+    "- le recapitulatif + le Bulletin Officiel de la Cote (BOC) a la cloture "
+    "de chaque seance\n\n"
+    "Tu peux aussi me poser n'importe quelle question sur la BRVM a tout "
+    "moment, je te repondrai directement ici.\n\n"
+    "Pour te desabonner a tout moment, ecris STOP."
+)
+
+
+@app.on_event("startup")
+def _on_startup() -> None:
+    brvm_scheduler.start()
+
+
+@app.on_event("shutdown")
+def _on_shutdown() -> None:
+    brvm_scheduler.stop()
 
 
 def _verify_signature(raw_body: bytes, signature_header: str | None) -> bool:
@@ -105,21 +130,37 @@ def _handle_message(message: dict) -> None:
     if not sender:
         return
 
-    if msg_type != "text":
-        reply_text = (
-            "Pour l'instant je ne comprends que le texte. "
-            "Pose-moi une question, ex: \"quoi de beau aujourd'hui sur la BRVM ?\""
-        )
-    else:
-        user_text = message.get("text", {}).get("body", "")
-        logger.info("Message recu de %s: %s", sender, user_text)
-        reply_text = answer(user_text)
-
     client = WhatsAppClient(
         token=CONFIG.whatsapp_token,
         phone_number_id=CONFIG.whatsapp_phone_number_id,
         api_version=CONFIG.whatsapp_api_version,
     )
+    subscribers = Subscribers(CONFIG.subscribers_file)
+
+    if msg_type == "text":
+        user_text = message.get("text", {}).get("body", "").strip()
+        logger.info("Message recu de %s: %s", sender, user_text)
+
+        if user_text.lower() in UNSUBSCRIBE_KEYWORDS:
+            subscribers.remove(sender)
+            client.send_text(
+                to=sender,
+                body="Tu es desabonne(e) des alertes BRVM. Ecris-moi n'importe quoi pour te reabonner a tout moment.",
+            )
+            return
+
+        # Premier message de ce numero -> auto-abonnement + message de bienvenue.
+        if subscribers.add(sender):
+            client.send_text(to=sender, body=WELCOME_MESSAGE)
+
+        reply_text = answer(user_text)
+    else:
+        subscribers.add(sender)
+        reply_text = (
+            "Pour l'instant je ne comprends que le texte. "
+            "Pose-moi une question, ex: \"quoi de beau aujourd'hui sur la BRVM ?\""
+        )
+
     # Reponse a un message recu il y a quelques secondes -> toujours dans la
     # fenetre de 24h, le texte libre est donc autorise (pas besoin de template).
     client.send_text(to=sender, body=reply_text)

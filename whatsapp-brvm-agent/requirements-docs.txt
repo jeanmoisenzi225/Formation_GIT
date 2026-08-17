@@ -1,0 +1,3 @@
+# Dependance uniquement pour regenerer GUIDE_DEPLOIEMENT.pdf
+# (tools/build_guide_pdf.py) -- pas necessaire pour faire tourner l'agent.
+reportlab>=4.0.0

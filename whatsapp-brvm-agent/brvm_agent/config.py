@@ -42,14 +42,20 @@ class Config:
     whatsapp_app_secret: str = os.environ.get("WHATSAPP_APP_SECRET", "")
     brvm_context_ttl_seconds: int = int(os.environ.get("BRVM_CONTEXT_TTL_SECONDS", "900"))
 
-    def validate_for_sending(self) -> None:
+    # --- Abonnement automatique + planificateur integre au webhook ---
+    # Liste dynamique des numeros qui ont ecrit au bot (auto-abonnement).
+    # S'ajoute a WHATSAPP_RECIPIENTS (numeros fixes, ex: l'administrateur).
+    subscribers_file: str = os.environ.get("SUBSCRIBERS_FILE", "subscribers.json")
+    enable_scheduler: bool = os.environ.get("ENABLE_SCHEDULER", "true").lower() == "true"
+    news_poll_interval_minutes: int = int(os.environ.get("NEWS_POLL_INTERVAL_MINUTES", "20"))
+    boc_poll_interval_minutes: int = int(os.environ.get("BOC_POLL_INTERVAL_MINUTES", "20"))
+
+    def validate_core(self) -> None:
         missing = []
         if not self.whatsapp_token:
             missing.append("WHATSAPP_TOKEN")
         if not self.whatsapp_phone_number_id:
             missing.append("WHATSAPP_PHONE_NUMBER_ID")
-        if not self.whatsapp_recipients:
-            missing.append("WHATSAPP_RECIPIENTS")
         if missing:
             raise RuntimeError(
                 "Variables d'environnement manquantes: " + ", ".join(missing)

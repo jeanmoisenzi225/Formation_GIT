@@ -16,9 +16,31 @@ WhatsApp :
    et recevoir une réponse en langage naturel, générée par Claude et
    contextualisée avec les données BRVM les plus récentes.
 
-Les deux premiers points sont des envois **poussés** par l'agent (cron/planification).
-Le troisième est **réactif** : il répond aux messages reçus, via un petit
-serveur web qui doit tourner en continu (voir plus bas).
+**Abonnement automatique** : il n'y a rien à configurer manuellement pour
+qu'une nouvelle personne reçoive les alertes. Le **premier message qu'elle
+envoie** au numéro WhatsApp Business suffit à l'abonner (voir
+`brvm_agent/subscribers.py`). Elle peut se désabonner à tout moment en
+écrivant `STOP`.
+
+> ⚠️ **Important** : WhatsApp ne notifie jamais une entreprise quand
+> quelqu'un l'ajoute à ses contacts — seul un **message envoyé** déclenche
+> quelque chose côté serveur. C'est pour ça que l'abonnement se fait par un
+> premier message, pas par un simple ajout au répertoire. Pour rendre ça
+> immédiat côté utilisateur (5 min max), partagez un lien
+> `https://wa.me/<numero>?text=ABONNEMENT` (ou son QR code) : un tap ouvre
+> WhatsApp avec le message pré-rempli, il suffit d'appuyer sur Envoyer.
+
+Le guide pas-à-pas complet (déploiement + abonnement) est dans
+`GUIDE_DEPLOIEMENT.pdf` (régénérable via `tools/build_guide_pdf.py`,
+`pip install -r requirements-docs.txt` puis
+`python tools/build_guide_pdf.py`).
+
+Depuis la version actuelle, un **seul process** (`webhook_server.py`) gère
+tout : réponses conversationnelles, alertes news et recap BOC automatiques
+(planificateur intégré, voir `brvm_agent/scheduler.py`). Les scripts
+`check_news.py`/`send_recap.py` restent disponibles pour un usage en cron
+externe si vous préférez ne pas utiliser le planificateur intégré
+(`ENABLE_SCHEDULER=false`).
 
 ## Comment ça marche
 
@@ -60,9 +82,15 @@ sollicités au quotidien, il faut créer et faire approuver des templates.
 1. Créer une app sur [developers.facebook.com](https://developers.facebook.com/)
    avec le produit **WhatsApp**, et un numéro WhatsApp Business (un numéro
    de test suffit pour commencer).
-2. Récupérer `WHATSAPP_TOKEN` (jeton d'accès — utiliser un jeton permanent
-   via un *System User* Meta Business pour la prod, pas le jeton temporaire
-   24h de test) et `WHATSAPP_PHONE_NUMBER_ID`.
+2. Récupérer `WHATSAPP_TOKEN` (jeton d'accès) et `WHATSAPP_PHONE_NUMBER_ID`.
+   **Pour un fonctionnement continu (h24)**, il faut un jeton **permanent** :
+   le jeton "temporaire" affiché par défaut expire au bout de 24h, ce qui
+   casserait l'agent le lendemain. Créer un jeton permanent via Meta
+   Business Suite > Paramètres de l'entreprise > Utilisateurs système >
+   Ajouter un utilisateur système (rôle Admin) > Générer un nouveau jeton
+   avec la permission `whatsapp_business_messaging` (et
+   `whatsapp_business_management`) et une expiration "Jamais". Détails
+   pas-à-pas dans `GUIDE_DEPLOIEMENT.pdf`.
 3. Dans Meta Business Manager > WhatsApp Manager > Modèles de message,
    créer deux templates (catégorie **Utility**) :
    - `brvm_news_alert` (corps avec 3 variables), par exemple :
@@ -90,7 +118,7 @@ manuels uniquement), mettez `WHATSAPP_USE_TEMPLATES=false` dans `.env` :
 l'agent enverra alors du texte libre, mais **uniquement si le destinataire
 vous a écrit dans les 24h précédentes**.
 
-## Installation
+## Installation locale (pour tester avant de déployer)
 
 ```bash
 cd whatsapp-brvm-agent
@@ -98,95 +126,57 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-# éditer .env avec vos identifiants WhatsApp
+# éditer .env avec vos identifiants WhatsApp + Anthropic
 ```
 
-## Utilisation
+## Déploiement (méthode recommandée : un seul service, h24)
 
-```bash
-# Vérifier les nouvelles annonces et envoyer les alertes manquantes
-python check_news.py
+Depuis cette version, `webhook_server.py` fait tout dans un seul process
+qui doit rester actif en continu :
+- répond aux messages WhatsApp entrants (conversationnel) ;
+- abonne automatiquement tout nouveau numéro qui écrit ;
+- envoie les alertes news et le recap BOC en tâche de fond (planificateur
+  intégré, `brvm_agent/scheduler.py` — vérifie brvm.org toutes les
+  `NEWS_POLL_INTERVAL_MINUTES`/`BOC_POLL_INTERVAL_MINUTES`, 20 min par
+  défaut, et envoie dès qu'il y a du nouveau).
 
-# Envoyer le récapitulatif du dernier BOC publié (si pas déjà envoyé)
-python send_recap.py
-```
+C'est un seul service web à déployer (ex: Render, Railway, Fly.io — un
+`Procfile` est fourni : `web: uvicorn webhook_server:app --host 0.0.0.0
+--port $PORT`), joignable en HTTPS, avec les variables de `.env.example`
+renseignées. **Le guide détaillé, pas-à-pas, est dans
+`GUIDE_DEPLOIEMENT.pdf`** (Render en exemple concret, ~10 min).
 
-### Planification (cron, exemple sur un serveur/VPS/Raspberry Pi)
+⚠️ **GitHub Actions ne convient pas** pour ce mode : pas de process
+persistant possible, donc pas de webhook ni de planificateur en continu.
+
+### Alternative : scripts + cron externe (sans conversationnel)
+
+Si vous ne voulez que les alertes poussées (pas de réponse aux messages),
+`check_news.py` et `send_recap.py` restent utilisables indépendamment,
+en cron classique ou via le workflow GitHub Actions fourni
+(`.github/workflows/brvm-whatsapp.yml`, secrets `WHATSAPP_TOKEN`,
+`WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_RECIPIENTS`) :
 
 ```cron
-# Actualités toutes les 30 min, 8h-18h, du lundi au vendredi
 */30 8-18 * * 1-5 cd /chemin/vers/whatsapp-brvm-agent && venv/bin/python check_news.py >> agent.log 2>&1
-
-# Récapitulatif après la clôture de séance (à ajuster selon le calendrier BRVM)
-0 17 * * 1-5 cd /chemin/vers/whatsapp-brvm-agent && venv/bin/python send_recap.py >> agent.log 2>&1
+0,15,30,45 8-18 * * 1-5 cd /chemin/vers/whatsapp-brvm-agent && venv/bin/python send_recap.py >> agent.log 2>&1
 ```
 
-### Alternative sans serveur : GitHub Actions
+Dans ce mode, les destinataires viennent uniquement de `WHATSAPP_RECIPIENTS`
+(pas d'auto-abonnement, puisqu'il n'y a pas de webhook pour recevoir les
+messages).
 
-Un workflow prêt à l'emploi est fourni dans
-`.github/workflows/brvm-whatsapp.yml` : il tourne sur le cron GitHub Actions
-sans qu'il soit nécessaire d'héberger quoi que ce soit.
-
-1. Dans les paramètres du dépôt GitHub, ajouter les secrets `WHATSAPP_TOKEN`,
-   `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_RECIPIENTS`.
-2. Le workflow se déclenche automatiquement selon les crons définis, ou
-   manuellement via l'onglet Actions (`workflow_dispatch`).
-3. Limite à connaître : GitHub Actions ne fournit pas de disque persistant
-   entre les runs. Le workflow utilise `actions/cache` pour conserver
-   `state.json` (déduplication) d'un run à l'autre — fonctionnel mais moins
-   robuste qu'un vrai disque persistant. Pour un usage intensif, préférer un
-   petit serveur/cron dédié.
-
-## Assistant conversationnel (répondre à n'importe quel message)
-
-Contrairement aux alertes poussées, répondre à un message WhatsApp entrant
-nécessite un **webhook** : Meta doit pouvoir appeler une URL HTTPS publique
-de votre côté à chaque message reçu. C'est un serveur qui doit rester actif
-en permanence (pas un script cron).
-
-### Comment ça marche
+## Assistant conversationnel
 
 1. L'utilisateur envoie un message WhatsApp ("quoi de beau aujourd'hui ?").
-2. Meta appelle `POST /webhook` sur votre serveur (`webhook_server.py`).
+2. Meta appelle `POST /webhook` sur le serveur.
 3. Le serveur récupère les dernières données BRVM en cache (annonces +
    résumé du dernier BOC, rafraîchies au plus toutes les
    `BRVM_CONTEXT_TTL_SECONDS`, 15 min par défaut — `brvm_agent/context_cache.py`)
    et les passe en contexte à Claude (`brvm_agent/assistant.py`) avec le
    message de l'utilisateur.
-4. La réponse de Claude est renvoyée sur WhatsApp en texte libre — **pas
-   besoin de template ici** : on répond à un message reçu, donc on est par
-   définition dans la fenêtre de 24h.
-
-### Mise en place
-
-1. Créer une clé API sur [console.anthropic.com](https://console.anthropic.com/)
-   → `ANTHROPIC_API_KEY`.
-2. Dans `.env`, définir `WHATSAPP_VERIFY_TOKEN` (une chaîne arbitraire que
-   vous choisissez) et `WHATSAPP_APP_SECRET` (Meta App Dashboard >
-   Paramètres de l'app > De base > "App secret") — utilisé pour vérifier
-   que les requêtes reçues proviennent bien de Meta.
-3. Lancer le serveur :
-   ```bash
-   pip install -r requirements.txt
-   uvicorn webhook_server:app --host 0.0.0.0 --port 8000
-   ```
-4. Le rendre joignable en HTTPS publiquement. Options :
-   - **Test rapide en local** : [ngrok](https://ngrok.com/) —
-     `ngrok http 8000` donne une URL HTTPS temporaire.
-   - **Déploiement permanent** : un service qui garde un process actif en
-     continu — Render, Railway, Fly.io, ou un VPS avec `systemd` +
-     reverse proxy (Nginx/Caddy) pour le HTTPS. Un `Procfile` est fourni
-     pour les plateformes de type buildpack
-     (`web: uvicorn webhook_server:app --host 0.0.0.0 --port $PORT`).
-     ⚠️ **GitHub Actions ne convient pas ici** (pas de process persistant).
-5. Dans Meta App Dashboard > WhatsApp > Configuration, renseigner l'URL du
-   webhook (`https://votre-domaine/webhook`) et le `WHATSAPP_VERIFY_TOKEN`
-   choisi, puis s'abonner au champ `messages`.
-
-### Tester
-
-Écrivez simplement au numéro WhatsApp Business configuré — n'importe quel
-message. La réponse doit arriver en quelques secondes.
+4. La réponse de Claude est renvoyée sur WhatsApp en texte libre — pas
+   besoin de template ici, on répond à un message reçu (fenêtre de 24h).
 
 ## Configuration (`.env`)
 
@@ -194,11 +184,14 @@ Voir `.env.example` pour la liste complète des variables. Les principales :
 
 | Variable | Rôle |
 |---|---|
-| `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` | Identifiants WhatsApp Cloud API |
-| `WHATSAPP_RECIPIENTS` | Numéros destinataires (séparés par des virgules) |
-| `WHATSAPP_USE_TEMPLATES` | `true` en production (obligatoire hors fenêtre 24h) |
+| `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` | Identifiants WhatsApp Cloud API (jeton **permanent** pour un usage h24) |
+| `WHATSAPP_RECIPIENTS` | Numéros fixes additionnels (ex: vous-même), en plus des abonnés dynamiques |
+| `WHATSAPP_USE_TEMPLATES` | `true` en production (fallback auto quand un abonné est hors fenêtre 24h) |
 | `BRVM_NEWS_CATEGORIES` | Catégories d'annonces à surveiller |
-| `STATE_FILE` | Fichier local de déduplication |
+| `STATE_FILE` | Fichier local de déduplication des envois |
+| `SUBSCRIBERS_FILE` | Fichier local des numéros auto-abonnés |
+| `ENABLE_SCHEDULER` | `true` pour que le webhook envoie aussi les alertes/recap (mode 1 service) |
+| `NEWS_POLL_INTERVAL_MINUTES`, `BOC_POLL_INTERVAL_MINUTES` | Fréquence de vérification de brvm.org |
 | `ANTHROPIC_API_KEY` | Clé API Claude, pour l'assistant conversationnel |
 | `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET` | Sécurisation du webhook entrant |
 
@@ -219,3 +212,10 @@ Voir `.env.example` pour la liste complète des variables. Les principales :
 - Le webhook doit rester actif en permanence, contrairement aux scripts
   `check_news.py`/`send_recap.py` qui peuvent tourner en cron ponctuel :
   prévoir un hébergement adapté (voir section dédiée).
+- L'abonnement se fait uniquement par **message envoyé** au numéro
+  WhatsApp Business — WhatsApp ne notifie jamais quand quelqu'un ajoute le
+  numéro à son répertoire.
+- Un abonné qui n'écrit jamais au bot (juste destinataire passif des
+  alertes) sortira de la fenêtre de 24h : les envois automatiques
+  basculeront alors sur les message templates — d'où l'intérêt de les
+  faire approuver par Meta dès le lancement (voir `GUIDE_DEPLOIEMENT.pdf`).

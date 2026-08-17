@@ -4,4 +4,5 @@ venv/
 .venv/
 whatsapp-brvm-agent/.env
 whatsapp-brvm-agent/state.json
+whatsapp-brvm-agent/subscribers.json
 whatsapp-brvm-agent/agent.log
