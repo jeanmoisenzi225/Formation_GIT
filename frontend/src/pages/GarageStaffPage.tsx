@@ -1,24 +1,23 @@
 import { FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import { ApiError } from "../api/client";
+import { apiRequest, ApiError } from "../api/client";
 
-export function RegisterPage() {
-  const { registerClient } = useAuth();
-  const navigate = useNavigate();
+export function GarageStaffPage() {
+  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", password: "" });
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setMessage(null);
     setSubmitting(true);
     try {
-      await registerClient(form);
-      navigate("/dashboard");
+      await apiRequest("/auth/register/staff", { method: "POST", body: form });
+      setMessage(`Compte créé pour ${form.name}`);
+      setForm({ name: "", email: "", password: "" });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Inscription impossible");
+      setError(err instanceof ApiError ? err.message : "Erreur lors de la création du compte");
     } finally {
       setSubmitting(false);
     }
@@ -26,7 +25,7 @@ export function RegisterPage() {
 
   return (
     <div className="page narrow">
-      <h1>Créer mon compte client</h1>
+      <h1>Ajouter un membre de l'équipe</h1>
       <form className="card form" onSubmit={handleSubmit}>
         <label>Nom complet</label>
         <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -39,9 +38,6 @@ export function RegisterPage() {
           onChange={(e) => setForm({ ...form, email: e.target.value })}
         />
 
-        <label>Téléphone</label>
-        <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-
         <label>Mot de passe</label>
         <input
           type="password"
@@ -51,15 +47,13 @@ export function RegisterPage() {
           onChange={(e) => setForm({ ...form, password: e.target.value })}
         />
 
+        {message && <p>{message}</p>}
         {error && <p className="error">{error}</p>}
 
         <button type="submit" disabled={submitting}>
-          {submitting ? "Création..." : "Créer mon compte"}
+          {submitting ? "Création..." : "Créer le compte"}
         </button>
       </form>
-      <p>
-        Déjà client ? <a href="/login">Connectez-vous</a>
-      </p>
     </div>
   );
 }

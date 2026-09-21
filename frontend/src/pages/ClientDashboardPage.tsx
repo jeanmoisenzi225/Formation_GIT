@@ -1,17 +1,15 @@
 import { FormEvent, useEffect, useState } from "react";
 import { apiRequest, ApiError } from "../api/client";
-import { Appointment, Garage, Vehicle } from "../api/types";
+import { Appointment, Vehicle } from "../api/types";
 import { AppointmentStatusBadge, WorkOrderStatusBadge } from "../components/StatusBadge";
 
 export function ClientDashboardPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [garages, setGarages] = useState<Garage[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const [newVehicle, setNewVehicle] = useState({ brand: "", model: "", plateNumber: "", year: "" });
   const [booking, setBooking] = useState({
-    garageId: "",
     vehicleId: "",
     requestedDate: "",
     serviceType: "",
@@ -20,13 +18,11 @@ export function ClientDashboardPage() {
   const [submitting, setSubmitting] = useState(false);
 
   async function refresh() {
-    const [v, g, a] = await Promise.all([
+    const [v, a] = await Promise.all([
       apiRequest<Vehicle[]>("/vehicles"),
-      apiRequest<Garage[]>("/garages"),
       apiRequest<Appointment[]>("/appointments/mine"),
     ]);
     setVehicles(v);
-    setGarages(g);
     setAppointments(a);
   }
 
@@ -66,7 +62,7 @@ export function ClientDashboardPage() {
           requestedDate: new Date(booking.requestedDate).toISOString(),
         },
       });
-      setBooking({ garageId: "", vehicleId: "", requestedDate: "", serviceType: "", description: "" });
+      setBooking({ vehicleId: "", requestedDate: "", serviceType: "", description: "" });
       await refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Erreur lors de la prise de rendez-vous");
@@ -138,20 +134,6 @@ export function ClientDashboardPage() {
       <section>
         <h2>Prendre rendez-vous</h2>
         <form className="card form" onSubmit={handleBook}>
-          <label>Garage</label>
-          <select
-            required
-            value={booking.garageId}
-            onChange={(e) => setBooking({ ...booking, garageId: e.target.value })}
-          >
-            <option value="">Choisir un garage</option>
-            {garages.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name} — {g.city}
-              </option>
-            ))}
-          </select>
-
           <label>Véhicule</label>
           <select
             required

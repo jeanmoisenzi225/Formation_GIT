@@ -28,14 +28,14 @@ appointmentsRouter.post(
       throw new HttpError(404, "Véhicule introuvable");
     }
 
-    const garage = await prisma.garage.findUnique({ where: { id: input.garageId } });
+    const garage = await prisma.garage.findFirst();
     if (!garage) {
-      throw new HttpError(404, "Garage introuvable");
+      throw new HttpError(404, "Le garage n'est pas encore configuré");
     }
 
     const appointment = await prisma.appointment.create({
       data: {
-        garageId: input.garageId,
+        garageId: garage.id,
         vehicleId: input.vehicleId,
         clientId: req.auth!.userId,
         requestedDate: input.requestedDate,

@@ -17,7 +17,7 @@ export function createApp() {
   app.get("/health", (_req, res) => res.json({ status: "ok" }));
 
   app.use("/api/auth", authRouter);
-  app.use("/api/garages", garagesRouter);
+  app.use("/api/garage", garagesRouter);
   app.use("/api/vehicles", vehiclesRouter);
   app.use("/api/appointments", appointmentsRouter);
   app.use("/api/work-orders", workOrdersRouter);
