@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CLIENT
+  GARAGE_ADMIN
+  GARAGE_STAFF
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  REFUSED
+  CANCELLED
+  COMPLETED
+}
+
+enum WorkOrderStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  WAITING_PARTS
+  COMPLETED
+}
+
+model Garage {
+  id        String   @id @default(uuid())
+  name      String
+  city      String
+  address   String
+  phone     String
+  email     String?  @unique
+  createdAt DateTime @default(now())
+
+  users        User[]
+  appointments Appointment[]
+}
+
+model User {
+  id           String   @id @default(uuid())
+  role         Role
+  name         String
+  email        String   @unique
+  phone        String?
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  garageId String?
+  garage   Garage? @relation(fields: [garageId], references: [id])
+
+  vehicles     Vehicle[]
+  appointments Appointment[]
+}
+
+model Vehicle {
+  id          String   @id @default(uuid())
+  brand       String
+  model       String
+  plateNumber String
+  year        Int?
+  createdAt   DateTime @default(now())
+
+  clientId String
+  client   User   @relation(fields: [clientId], references: [id])
+
+  appointments Appointment[]
+}
+
+model Appointment {
+  id            String            @id @default(uuid())
+  requestedDate DateTime
+  serviceType   String
+  description   String?
+  status        AppointmentStatus @default(PENDING)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  garageId String
+  garage   Garage @relation(fields: [garageId], references: [id])
+
+  clientId String
+  client   User   @relation(fields: [clientId], references: [id])
+
+  vehicleId String
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
+
+  workOrder WorkOrder?
+}
+
+model WorkOrder {
+  id           String          @id @default(uuid())
+  status       WorkOrderStatus @default(NOT_STARTED)
+  notes        String?
+  costEstimate Float?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime        @default(now())
+
+  appointmentId String      @unique
+  appointment   Appointment @relation(fields: [appointmentId], references: [id])
+
+  updates WorkOrderUpdate[]
+}
+
+model WorkOrderUpdate {
+  id        String          @id @default(uuid())
+  status    WorkOrderStatus
+  comment   String?
+  createdAt DateTime        @default(now())
+
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
+}
